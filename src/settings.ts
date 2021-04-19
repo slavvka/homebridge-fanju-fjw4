@@ -1,9 +1,20 @@
+/*
+ * Copyright (c) 2021. Slava Mankivski
+ */
+
+// eslint-disable-next-line
+const packageJson = require('../package.json');
+
 /**
  * This is the name of the platform that users will use to register the plugin in the Homebridge config.json
  */
-export const PLATFORM_NAME = 'ExampleHomebridgePlugin';
+export const PLATFORM_NAME = 'FanJuFJW4';
 
 /**
- * This must match the name of your plugin as defined the package.json
+ * The version the package is currently on as defined in package.json
  */
-export const PLUGIN_NAME = 'homebridge-plugin-name';
+export const VERSION: string = packageJson.version;
+
+export const MANUFACTURER = 'FanJu';
+export const MODEL = 'FJW4';
+export const DISPLAY_NAME = 'FJW4';

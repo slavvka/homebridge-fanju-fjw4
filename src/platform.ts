@@ -1,116 +1,88 @@
-import { API, DynamicPlatformPlugin, Logger, PlatformAccessory, PlatformConfig, Service, Characteristic } from 'homebridge';
-
-import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
-import { ExamplePlatformAccessory } from './platformAccessory';
-
-/**
- * HomebridgePlatform
- * This class is the main constructor for your plugin, this is where you should
- * parse the user config and discover/register accessories with Homebridge.
+/*
+ * Copyright (c) 2021. Slava Mankivski
  */
-export class ExampleHomebridgePlatform implements DynamicPlatformPlugin {
-  public readonly Service: typeof Service = this.api.hap.Service;
-  public readonly Characteristic: typeof Characteristic = this.api.hap.Characteristic;
 
-  // this is used to track restored cached accessories
-  public readonly accessories: PlatformAccessory[] = [];
+import {AccessoryConfig, AccessoryPlugin, StaticPlatformPlugin} from 'homebridge';
+import {Logging} from 'homebridge/lib/logger';
+import {PlatformConfig} from 'homebridge/lib/bridgeService';
+import {API} from 'homebridge/lib/api';
+import {WeatherApi} from './api/weather-api';
+import {WeatherStation} from './weather-station';
+import {WeatherDevice} from './api/response';
 
-  constructor(
-    public readonly log: Logger,
-    public readonly config: PlatformConfig,
-    public readonly api: API,
-  ) {
-    this.log.debug('Finished initializing platform:', this.config.name);
+export class WeatherStationPlatform implements StaticPlatformPlugin {
+  private readonly logger: Logging;
+  private readonly config: PlatformConfig;
+  private readonly api: API;
 
-    // When this event is fired it means Homebridge has restored all cached accessories from disk.
-    // Dynamic Platform plugins should only register new accessories after this event was fired,
-    // in order to ensure they weren't added to homebridge already. This event can also be used
-    // to start discovery of new accessories.
-    this.api.on('didFinishLaunching', () => {
-      log.debug('Executed didFinishLaunching callback');
-      // run the method to discover / register your devices as accessories
-      this.discoverDevices();
-    });
-  }
+  private readonly weatherApi?: WeatherApi;
+  private device?: WeatherDevice;
 
-  /**
-   * This function is invoked when homebridge restores cached accessories from disk at startup.
-   * It should be used to setup event handlers for characteristics and update respective values.
-   */
-  configureAccessory(accessory: PlatformAccessory) {
-    this.log.info('Loading accessory from cache:', accessory.displayName);
+  private stateTimer;
+  private pollingInterval: number;
 
-    // add the restored accessory to the accessories cache so we can track if it has already been registered
-    this.accessories.push(accessory);
-  }
+  constructor(logger: Logging, config: PlatformConfig, api: API) {
+    this.logger = logger;
+    this.config = config;
+    this.api = api;
 
-  /**
-   * This is an example method showing how to register discovered accessories.
-   * Accessories must only be registered once, previously created accessories
-   * must not be registered again to prevent "duplicate UUID" errors.
-   */
-  discoverDevices() {
-
-    // EXAMPLE ONLY
-    // A real plugin you would discover accessories from the local network, cloud services
-    // or a user-defined array in the platform config.
-    const exampleDevices = [
-      {
-        exampleUniqueId: 'ABCD',
-        exampleDisplayName: 'Bedroom',
-      },
-      {
-        exampleUniqueId: 'EFGH',
-        exampleDisplayName: 'Kitchen',
-      },
-    ];
-
-    // loop over the discovered devices and register each one if it has not already been registered
-    for (const device of exampleDevices) {
-
-      // generate a unique id for the accessory this should be generated from
-      // something globally unique, but constant, for example, the device serial
-      // number or MAC address
-      const uuid = this.api.hap.uuid.generate(device.exampleUniqueId);
-
-      // see if an accessory with the same uuid has already been registered and restored from
-      // the cached devices we stored in the `configureAccessory` method above
-      const existingAccessory = this.accessories.find(accessory => accessory.UUID === uuid);
-
-      if (existingAccessory) {
-        // the accessory already exists
-        this.log.info('Restoring existing accessory from cache:', existingAccessory.displayName);
-
-        // if you need to update the accessory.context then you should run `api.updatePlatformAccessories`. eg.:
-        // existingAccessory.context.device = device;
-        // this.api.updatePlatformAccessories([existingAccessory]);
-
-        // create the accessory handler for the restored accessory
-        // this is imported from `platformAccessory.ts`
-        new ExamplePlatformAccessory(this, existingAccessory);
-
-        // it is possible to remove platform accessories at any time using `api.unregisterPlatformAccessories`, eg.:
-        // remove platform accessories when no longer present
-        // this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [existingAccessory]);
-        // this.log.info('Removing existing accessory from cache:', existingAccessory.displayName);
-      } else {
-        // the accessory does not yet exist, so we need to create it
-        this.log.info('Adding new accessory:', device.exampleDisplayName);
-
-        // create a new accessory
-        const accessory = new this.api.platformAccessory(device.exampleDisplayName, uuid);
-
-        // store a copy of the device object in the `accessory.context`
-        // the `context` property can be used to store any data about the accessory you may need
-        accessory.context.device = device;
-
-        // create the accessory handler for the newly create accessory
-        // this is imported from `platformAccessory.ts`
-        new ExamplePlatformAccessory(this, accessory);
-
-        // link the accessory to your platform
-        this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
-      }
+    if (!config || !config.options) {
+      this.logger.info('No options found in configuration file, disabling plugin.');
+      return;
     }
+    const options = config.options;
+
+    if (options.username === undefined || options.password === undefined) {
+      this.logger.error('Missing required config parameter.');
+      return;
+    }
+
+    this.pollingInterval = config.options.pollingInterval ? config.options.pollingInterval : 30;
+
+    this.weatherApi = new WeatherApi(
+      options.username,
+      options.password,
+      this.logger,
+    );
+
+    this.logger.debug('Finished initializing platform:', this.config.name);
+  }
+
+  /**
+   * @param {boolean} isIndoor
+   * @private
+   */
+  private getAccessoryConfig(isIndoor: boolean): AccessoryConfig {
+    const suffix = isIndoor ? 'Indoor' : 'Outdoor';
+    return {
+      accessory: this.config.name + suffix,
+      name: this.config.name + suffix,
+      isIndoor: isIndoor,
+      weatherApi: this.weatherApi,
+      device: this.device,
+    };
+  }
+
+  /**
+   * @param {(foundAccessories: AccessoryPlugin[]) => void): void} callback
+   */
+  async accessories(callback: (foundAccessories: AccessoryPlugin[]) => void): Promise<void> {
+    await this.weatherApi?.retrieveToken();
+    this.device = await this.weatherApi?.getBoundDevice();
+    await this.retrieveState();
+    this.setupStateRetrieval();
+
+    const indoorWeatherStation = new WeatherStation(this.logger, this.getAccessoryConfig(true), this.api);
+    const outdoorWeatherStation = new WeatherStation(this.logger, this.getAccessoryConfig(false), this.api);
+
+    callback([indoorWeatherStation, outdoorWeatherStation]);
+  }
+
+  private setupStateRetrieval(): void {
+    this.stateTimer = setTimeout(this.retrieveState.bind(this), this.pollingInterval * 1000);
+  }
+
+  private async retrieveState(): Promise<void> {
+    await this.weatherApi?.retrieveState();
   }
 }
