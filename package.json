@@ -1,7 +1,7 @@
 {
   "name": "homebridge-fanju-fjw4",
   "displayName": "FanJu FJW4 Wi-Fi Weather Station",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Homebridge platform plugin for FanJu FJW4 Wi-Fi Weather Station",
   "license": "Apache-2.0",
   "repository": {
@@ -23,7 +23,12 @@
     "prepublishOnly": "npm run lint && npm run build"
   },
   "keywords": [
-    "homebridge-plugin"
+    "homebridge-plugin",
+    "homebridge",
+    "smart-home",
+    "homekit",
+    "FanJu",
+    "FJW4"
   ],
   "dependencies": {
     "axios": "^0.21.1",
