@@ -7,7 +7,7 @@ The plugin creates a platform with two separate accessories for indoor amd outdo
 # Installation
 
 1. Install homebridge using: `npm install -g homebridge`
-2. Install this plug-in using: `npm install -g homebridge-emaxlife`
+2. Install this plug-in using: `npm install -g homebridge-fanju-fjw4`
 3. Update your configuration file. See example `config.json` snippet below.
 
 # Configuration

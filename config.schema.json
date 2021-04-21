@@ -11,7 +11,7 @@
         "title": "Name",
         "type": "string",
         "required": true,
-        "default": "FanjuFJW4",
+        "default": "FanJuFJW4",
         "description": "You shouldn't need to change this."
       },
       "options": {
