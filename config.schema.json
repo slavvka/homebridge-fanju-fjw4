@@ -1,5 +1,5 @@
 {
-  "pluginAlias": "FanjuFJW4",
+  "pluginAlias": "FanJuFJW4",
   "pluginType": "platform",
   "singular": true,
   "headerDisplay": "FanJu FJW4 Wi-Fi Weather Station plug-in for [Homebridge](https://github.com/nfarina/homebridge)",
