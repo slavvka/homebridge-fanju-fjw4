@@ -18,7 +18,7 @@
   "main": "dist/index.js",
   "scripts": {
     "lint": "eslint src/**.ts --max-warnings=0",
-    "test": "jest && eslint src/**.ts --max-warnings=0s",
+    "test": "jest && eslint src/**.ts --max-warnings=0",
     "test:watch": "jest --watch --notify --notifyMode=change --coverage",
     "watch": "npm run build && npm link && nodemon",
     "build": "rimraf ./dist && tsc",
