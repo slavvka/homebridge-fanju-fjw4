@@ -83,13 +83,13 @@ export class WeatherStation implements AccessoryPlugin {
 
   async handleTemperatureGet() {
     const data = await this.getSensorData(SensorType.Temperature, this.config.isIndoor ? 0 : 1);
-    this.log.debug('Retrieved ' + this.suffix + ' temperature: ' + data?.curVal);
+    this.log.info('Retrieved ' + this.suffix + ' temperature: ' + data?.curVal);
     return WeatherStation.fahrenheitToCelsius(data?.curVal);
   }
 
   async handleHumidityGet() {
     const data = await this.getSensorData(SensorType.Humidity, this.config.isIndoor ? 0 : 1);
-    this.log.debug('Retrieved ' + this.suffix + ' humidity: ' + data?.curVal);
+    this.log.info('Retrieved ' + this.suffix + ' humidity: ' + data?.curVal);
     return data?.curVal;
   }
 

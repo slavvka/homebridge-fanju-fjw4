@@ -19,7 +19,7 @@ export class WeatherStationPlatform implements StaticPlatformPlugin {
   private device?: WeatherDevice;
 
   private stateTimer;
-  private pollingInterval: number;
+  private readonly pollingInterval: number;
 
   constructor(logger: Logging, config: PlatformConfig, api: API) {
     this.logger = logger;
@@ -45,7 +45,7 @@ export class WeatherStationPlatform implements StaticPlatformPlugin {
       this.logger,
     );
 
-    this.logger.debug('Finished initializing platform:', this.config.name);
+    this.logger.info('Finished initializing platform: ', this.config.name);
   }
 
   /**
