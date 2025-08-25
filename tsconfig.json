@@ -9,9 +9,13 @@
     "outDir": "./dist",
     "rootDir": "./src",
     "strict": true,
+    "noImplicitAny": true,
+    "strictPropertyInitialization": true,
     "esModuleInterop": true,
-    "noImplicitAny": false,
-    "strictPropertyInitialization": false
+    "resolveJsonModule": true,
+    "verbatimModuleSyntax": false,
+    "exactOptionalPropertyTypes": true,
+    "noUncheckedIndexedAccess": true
   },
   "include": ["src/"],
   "exclude": ["**/*.spec.ts"]

@@ -5,7 +5,7 @@
 import { RealtimeState } from "./response";
 
 export class State {
-  private state: RealtimeState;
+  private state: RealtimeState = {};
 
   public getState(): RealtimeState {
     return this.state;

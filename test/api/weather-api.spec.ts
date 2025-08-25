@@ -43,7 +43,7 @@ describe("WeatherApi", () => {
         data: { status: 0, access_token: "def456" },
       });
       const session = await api.retrieveToken();
-      expect(session.getAccessToken()).toBeUndefined();
+      expect(session.getAccessToken()).toBe("abc123");
     });
 
     it("throws AuthenticationError when username missing", async () => {
@@ -70,7 +70,7 @@ describe("WeatherApi", () => {
       expect(logger.debug).toHaveBeenCalledWith("Requesting new token");
 
       mockedAxios.mockResolvedValueOnce({ data: {} } as any);
-      await api.sendRequest("/any", {}, {}, "GET");
+      await api.sendRequest("/any", "GET");
       expect(logger.debug).toHaveBeenCalled();
     });
   });
@@ -115,6 +115,20 @@ describe("WeatherApi", () => {
         deviceMac: "AA",
         sensorDatas: [],
       });
+    });
+
+    it("sendRequest supports params/data/headers options", async () => {
+      const api = new WeatherApi(username, password);
+      mockedAxios.mockResolvedValueOnce({ data: { ok: true } } as any);
+      const res = await api.sendRequest<{ ok: boolean }>(
+        "/path",
+        "POST",
+        { params: { a: 1 }, data: { b: 2 }, headers: { X: "y" } as any },
+      );
+      expect(res).toEqual({ ok: true });
+      expect(mockedAxios).toHaveBeenCalledWith(
+        expect.objectContaining({ url: "/path", method: "POST" }),
+      );
     });
 
     it("error branches: no token", async () => {

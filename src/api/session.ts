@@ -3,7 +3,7 @@
  */
 
 export class Session {
-  private accessToken: string;
+  private accessToken!: string;
 
   /**
    * @param {string} accessToken
@@ -19,7 +19,7 @@ export class Session {
   /**
    * @param {string} accessToken
    */
-  public resetToken(accessToken): void {
+  public resetToken(accessToken: string): void {
     this.accessToken = accessToken;
   }
 

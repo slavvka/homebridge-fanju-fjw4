@@ -112,6 +112,19 @@ describe("WeatherStation", () => {
     expect(Number.isNaN(t as any)).toBe(true);
   });
 
+  it("skips humidity when sensor missing", async () => {
+    const cfg = {
+      accessory: "Indoor",
+      name: "Indoor",
+      isIndoor: true,
+      device: { sn: "SN123" },
+      weatherApi: { getRealtimeState: () => ({ sensorDatas: [] }) },
+    } as any as AccessoryConfig;
+    const ws = new WeatherStation(log, cfg, api);
+    const h = await (ws as any).handleHumidityGet();
+    expect(h).toBeUndefined();
+  });
+
   it("handles no weatherApi present (returns NaN/undefined values)", async () => {
     const cfg = makeConfig(true, 70, 1, true, false);
     const ws = new WeatherStation(log, cfg, api);

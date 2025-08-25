@@ -53,6 +53,7 @@ const createApi = (): API =>
       } as any,
       Characteristic: class anyCharacteristic {} as any,
     },
+    on: jest.fn(),
   }) as unknown as API;
 
 describe("FJW4 Platform", () => {
@@ -71,7 +72,7 @@ describe("FJW4 Platform", () => {
         password: "PASSWORD",
       },
     };
-    const api = new Mock<API>().object();
+    const api = createApi();
 
     const platform = new WeatherStationPlatform(logger, config, api);
     expect(platform).toBeInstanceOf(WeatherStationPlatform);
@@ -85,6 +86,16 @@ describe("FJW4 Platform", () => {
     // eslint-disable-next-line no-new
     new WeatherStationPlatform(logger as any, config, api);
 
+    expect(logger.info).toHaveBeenCalledWith(
+      "No options found in configuration file, disabling plugin.",
+    );
+  });
+
+  it("logs info and exits when config has no options", () => {
+    const logger = createLogger();
+    const api = createApi();
+    const cfg = { platform: "PL", name: "NAME" } as any;
+    new WeatherStationPlatform(logger as any, cfg, api);
     expect(logger.info).toHaveBeenCalledWith(
       "No options found in configuration file, disabling plugin.",
     );
@@ -122,7 +133,7 @@ describe("FJW4 Platform", () => {
       .mockResolvedValue({ sn: "SN" } as any);
     jest.spyOn(WeatherApi.prototype, "retrieveState").mockResolvedValue();
 
-    const timeoutSpy = jest.spyOn(global, "setTimeout");
+    const intervalSpy = jest.spyOn(global, "setInterval");
 
     const platform = new WeatherStationPlatform(logger as any, config, api);
 
@@ -132,7 +143,12 @@ describe("FJW4 Platform", () => {
     });
 
     expect(accessories.length).toBe(2);
-    expect(timeoutSpy).toHaveBeenCalledWith(expect.any(Function), 1000);
+    // pollingInterval=1 is clamped to 600s
+    expect(intervalSpy).toHaveBeenCalledWith(expect.any(Function), 600000);
+    expect(logger.warn).toHaveBeenCalledWith(
+      "Polling interval %ds is below recommended minimum (600s). Clamping to 600s.",
+      1,
+    );
     jest.clearAllTimers();
     jest.useRealTimers();
   });
@@ -155,13 +171,13 @@ describe("FJW4 Platform", () => {
       .mockResolvedValue({ sn: "SN" } as any);
     jest.spyOn(WeatherApi.prototype, "retrieveState").mockResolvedValue();
 
-    const timeoutSpy = jest.spyOn(global, "setTimeout");
+    const intervalSpy = jest.spyOn(global, "setInterval");
 
     const platform = new WeatherStationPlatform(logger as any, config, api);
 
     await platform.accessories(() => {});
 
-    expect(timeoutSpy).toHaveBeenCalledWith(expect.any(Function), 30000);
+    expect(intervalSpy).toHaveBeenCalledWith(expect.any(Function), 600000);
     jest.clearAllTimers();
     jest.useRealTimers();
   });
@@ -188,6 +204,103 @@ describe("FJW4 Platform", () => {
 
     const platform = new WeatherStationPlatform(logger as any, config, api);
     await expect(platform.accessories((a) => a)).rejects.toThrow("boom");
+    jest.clearAllTimers();
+    jest.useRealTimers();
+  });
+
+  it("registers shutdown handler and clears interval on shutdown", async () => {
+    jest.useFakeTimers();
+    const logger = createLogger();
+    const onSpy = jest.fn();
+    const api = ({ ...createApi(), on: onSpy } as unknown) as API;
+    const config: any = {
+      platform: "PL",
+      name: "NAME",
+      options: { username: "u", password: "p", pollingInterval: 10 },
+    };
+
+    jest
+      .spyOn(WeatherApi.prototype, "retrieveToken")
+      .mockResolvedValue(new Session("abc") as any);
+    jest
+      .spyOn(WeatherApi.prototype, "getBoundDevice")
+      .mockResolvedValue({ sn: "SN" } as any);
+    jest.spyOn(WeatherApi.prototype, "retrieveState").mockResolvedValue();
+
+    const clearSpy = jest.spyOn(global, "clearInterval");
+    const platform = new WeatherStationPlatform(logger as any, config, api);
+    // start interval
+    (platform as any).setupStateRetrieval();
+
+    expect(onSpy).toHaveBeenCalledWith("shutdown", expect.any(Function));
+    const shutdownHandler = onSpy.mock.calls[0][1] as () => void;
+    shutdownHandler();
+    expect(clearSpy).toHaveBeenCalled();
+    jest.useRealTimers();
+  });
+
+  it("getAccessoryConfig returns proper names for indoor/outdoor", () => {
+    const logger = createLogger();
+    const api = createApi();
+    const config: any = {
+      platform: "PL",
+      name: "NAME",
+      options: { username: "u", password: "p" },
+    };
+    const platform = new WeatherStationPlatform(logger as any, config, api);
+    const indoor = (platform as any).getAccessoryConfig(true);
+    const outdoor = (platform as any).getAccessoryConfig(false);
+    expect(indoor.name).toBe("NAME" + "Indoor");
+    expect(outdoor.name).toBe("NAME" + "Outdoor");
+  });
+
+  it("does not clamp when pollingInterval is >= 600", async () => {
+    jest.useFakeTimers();
+    const logger = createLogger();
+    const api = createApi();
+    const config: any = {
+      platform: "PL",
+      name: "NAME",
+      options: { username: "u", password: "p", pollingInterval: 601 },
+    };
+
+    jest
+      .spyOn(WeatherApi.prototype, "retrieveToken")
+      .mockResolvedValue(new Session("abc") as any);
+    jest
+      .spyOn(WeatherApi.prototype, "getBoundDevice")
+      .mockResolvedValue({ sn: "SN" } as any);
+    jest.spyOn(WeatherApi.prototype, "retrieveState").mockResolvedValue();
+
+    const intervalSpy = jest.spyOn(global, "setInterval");
+    const platform = new WeatherStationPlatform(logger as any, config, api);
+    await platform.accessories(() => {});
+
+    expect(intervalSpy).toHaveBeenCalledWith(
+      expect.any(Function),
+      601000,
+    );
+    expect(logger.warn).not.toHaveBeenCalled();
+    jest.clearAllTimers();
+    jest.useRealTimers();
+  });
+
+  it("accessories still registers without weatherApi (optional chain false)", async () => {
+    jest.useFakeTimers();
+    const logger = createLogger();
+    const api = createApi();
+    const config: any = { platform: "PL", name: "NAME" };
+
+    const intervalSpy = jest.spyOn(global, "setInterval");
+    const platform = new WeatherStationPlatform(logger as any, config, api);
+
+    let accessories: any[] = [];
+    await platform.accessories((found) => {
+      accessories = found;
+    });
+
+    expect(accessories.length).toBe(2);
+    expect(intervalSpy).toHaveBeenCalled();
     jest.clearAllTimers();
     jest.useRealTimers();
   });

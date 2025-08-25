@@ -2,14 +2,14 @@
  * Copyright (c) 2021. Slava Mankivski
  */
 
-import {
+import type {
   AccessoryConfig,
   AccessoryPlugin,
   StaticPlatformPlugin,
+  Logging,
+  PlatformConfig,
+  API,
 } from "homebridge";
-import { Logging } from "homebridge/lib/logger";
-import { PlatformConfig } from "homebridge/lib/bridgeService";
-import { API } from "homebridge/lib/api";
 import { WeatherApi } from "./api/weather-api";
 import { WeatherStation } from "./weather-station";
 import { WeatherDevice } from "./api/response";
@@ -20,10 +20,10 @@ export class WeatherStationPlatform implements StaticPlatformPlugin {
   private readonly api: API;
 
   private readonly weatherApi?: WeatherApi;
-  private device?: WeatherDevice;
+  private device: WeatherDevice | undefined;
 
-  private stateTimer;
-  private readonly pollingInterval: number;
+  private stateTimer?: NodeJS.Timeout;
+  private readonly pollingInterval: number = 600;
 
   constructor(logger: Logging, config: PlatformConfig, api: API) {
     this.logger = logger;
@@ -45,7 +45,18 @@ export class WeatherStationPlatform implements StaticPlatformPlugin {
 
     this.pollingInterval = config.options.pollingInterval
       ? config.options.pollingInterval
-      : 30;
+      : this.pollingInterval;
+
+    // Enforce minimum interval of 600s to respect API and schema guidance
+    if (this.pollingInterval < 600) {
+      this.logger.warn(
+        "Polling interval %ds is below recommended minimum (600s). Clamping to 600s.",
+        this.pollingInterval,
+      );
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore - pollingInterval is readonly; we reassign via cast to satisfy runtime while keeping type safety elsewhere
+      this.pollingInterval = 600 as unknown as number;
+    }
 
     this.weatherApi = new WeatherApi(
       options.username,
@@ -54,6 +65,13 @@ export class WeatherStationPlatform implements StaticPlatformPlugin {
     );
 
     this.logger.info("Finished initializing platform: ", this.config.name);
+
+    // Ensure interval is cleaned up on shutdown
+    this.api.on("shutdown", () => {
+      if (this.stateTimer) {
+        clearInterval(this.stateTimer);
+      }
+    });
   }
 
   /**
@@ -97,10 +115,9 @@ export class WeatherStationPlatform implements StaticPlatformPlugin {
   }
 
   private setupStateRetrieval(): void {
-    this.stateTimer = setTimeout(
-      this.retrieveState.bind(this),
-      this.pollingInterval * 1000,
-    );
+    this.stateTimer = setInterval(() => {
+      void this.retrieveState();
+    }, this.pollingInterval * 1000);
   }
 
   private async retrieveState(): Promise<void> {

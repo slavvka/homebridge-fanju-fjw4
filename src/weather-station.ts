@@ -2,7 +2,7 @@
  * Copyright (c) 2021. Slava Mankivski
  */
 
-import {
+import type {
   AccessoryConfig,
   AccessoryPlugin,
   API,
@@ -11,7 +11,6 @@ import {
   Service,
 } from "homebridge";
 import { SensorType } from "./api/response";
-import _ from "lodash";
 import { DISPLAY_NAME, MANUFACTURER, MODEL, VERSION } from "./settings";
 
 /**
@@ -60,10 +59,7 @@ export class WeatherStation implements AccessoryPlugin {
         this.Characteristic.Name,
         DISPLAY_NAME + " " + this.suffix,
       )
-      .setCharacteristic(this.Characteristic.Version, VERSION)
-      .setCharacteristic(this.Characteristic.Identify, false)
-      .setCharacteristic(this.Characteristic.FirmwareRevision, VERSION)
-      .setCharacteristic(this.Characteristic.SerialNumber, VERSION);
+      .setCharacteristic(this.Characteristic.FirmwareRevision, VERSION);
 
     this.temperature = new this.Service.TemperatureSensor(
       DISPLAY_NAME + " " + this.suffix + " " + this.temperatureName,
@@ -97,7 +93,10 @@ export class WeatherStation implements AccessoryPlugin {
    */
   async getSensorData(type: SensorType, channel: number) {
     const state = await this.config.weatherApi?.getRealtimeState();
-    return _.find(state?.sensorDatas, { type, channel });
+    return state?.sensorDatas?.find(
+      (d: { type?: SensorType; channel?: number }) =>
+        d?.type === type && d?.channel === channel,
+    );
   }
 
   async handleTemperatureGet() {

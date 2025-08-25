@@ -2,9 +2,9 @@
  * Copyright (c) 2021. Slava Mankivski
  */
 
-import { Logger } from "homebridge";
+import type { Logger } from "homebridge";
 import { AuthenticationError } from "../errors";
-import axios, { AxiosRequestConfig, AxiosResponse } from "axios";
+import axios, { AxiosRequestConfig } from "axios";
 import { Session } from "./session";
 import {
   BoundDevicePayload,
@@ -34,13 +34,10 @@ export class WeatherApi {
       throw new Error("No valid token");
     }
 
-    const { data } = await this.sendRequest<BoundDevicePayload>(
+    const data = await this.sendRequest<BoundDevicePayload>(
       "/weather/getBindedDevice",
-      {},
-      {
-        emaxToken: this.session?.getAccessToken(),
-      },
       "GET",
+      { headers: { emaxToken: this.session?.getAccessToken() as string } },
     );
 
     if (data.status === 0) {
@@ -59,13 +56,10 @@ export class WeatherApi {
       throw new Error("No valid token");
     }
 
-    const { data } = await this.sendRequest<RealtimeStatePayload>(
+    const data = await this.sendRequest<RealtimeStatePayload>(
       "/weather/devData/getRealtime",
-      {},
-      {
-        emaxToken: this.session?.getAccessToken(),
-      },
       "GET",
+      { headers: { emaxToken: this.session?.getAccessToken() as string } },
     );
 
     if (data.status === 0) {
@@ -76,7 +70,6 @@ export class WeatherApi {
   }
 
   public async retrieveToken(): Promise<Session> {
-    let data: AxiosResponse["data"] = { status: 0 };
     if (!this.session?.hasToken()) {
       this.log?.debug("Requesting new token");
       // No token, lets get a token from the Emaxlife API
@@ -95,24 +88,18 @@ export class WeatherApi {
           .digest("hex"),
       };
 
-      data = (
-        await axios({
-          url: "/account/login",
-          baseURL: this.apiBaseUrl,
-          data: form,
-          method: "POST",
-        })
-      ).data;
-    }
+      const { data } = await axios({
+        url: "/account/login",
+        baseURL: this.apiBaseUrl,
+        data: form,
+        method: "POST",
+      });
 
-    if (data.status !== 0) {
-      throw new AuthenticationError(data.errorMsg);
-    }
-
-    if (!this.session?.hasToken()) {
-      this.session = new Session(data.content.token);
-    } else {
-      this.session.resetToken(data.access_token);
+      if (data.status !== 0) {
+        throw new AuthenticationError(data.errorMsg);
+      }
+      this.session = new Session(data.content.token as string);
+      return this.session;
     }
 
     return this.session;
@@ -124,21 +111,33 @@ export class WeatherApi {
    */
 
   public async sendRequest<T = Record<string, unknown>>(
-    url: AxiosRequestConfig["url"],
-    data: AxiosRequestConfig["data"],
-    headers: AxiosRequestConfig["headers"],
-    method: AxiosRequestConfig["method"],
-  ): Promise<{ data: T }> {
+    url: string,
+    method: "GET" | "POST" | "PUT" | "DELETE",
+    options?: {
+      params?: AxiosRequestConfig["params"] | undefined;
+      data?: AxiosRequestConfig["data"] | undefined;
+      headers?: AxiosRequestConfig["headers"] | undefined;
+    },
+  ): Promise<T> {
     this.log?.debug("Sending HTTP %s request to %s.", method, url);
 
-    const response = await axios({
+    const config: AxiosRequestConfig = {
       baseURL: this.apiBaseUrl,
       url,
-      data,
-      headers,
       method,
-    });
+    };
+    if (options?.params !== undefined) {
+      config.params = options.params;
+    }
+    if (options?.data !== undefined) {
+      config.data = options.data;
+    }
+    if (options?.headers !== undefined) {
+      config.headers = options.headers;
+    }
 
-    return { data: response.data };
+    const response = await axios(config);
+
+    return response.data as T;
   }
 }
