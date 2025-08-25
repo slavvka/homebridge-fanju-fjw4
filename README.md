@@ -27,15 +27,15 @@ Configuration sample (edit `~/.homebridge/config.json`):
 
 Required fields:
 
-* `name` Required. Must always be `FanJuFJW4`
-* `platform` Required. Must always be `FanJuFJW4`
-* `username` Required. The username used for authentication in the WeatherSense app
-* `password` Required. The password used for authentication in the WeatherSense app
-*  `pollingInterval` Optional. The frequency in seconds that the plugin polls the cloud to get device updates.
+- `name` Required. Must always be `FanJuFJW4`
+- `platform` Required. Must always be `FanJuFJW4`
+- `username` Required. The username used for authentication in the WeatherSense app
+- `password` Required. The password used for authentication in the WeatherSense app
+- `pollingInterval` Optional. The frequency in seconds that the plugin polls the cloud to get device updates.
 
 # FanJu FJW4 WI-FI Weather Station Sensors
 
-* *TemperatureSensor* accessory indicating the ambient temperature at the main station
-* *TemperatureSensor* accessory indicating the ambient temperature at the wireless outdoor sensor
-* *HumiditySensor* accessory indicating the relative humidity at the main station
-* *HumiditySensor* accessory indicating the relative humidity at the wireless outdoor sensor
+- _TemperatureSensor_ accessory indicating the ambient temperature at the main station
+- _TemperatureSensor_ accessory indicating the ambient temperature at the wireless outdoor sensor
+- _HumiditySensor_ accessory indicating the relative humidity at the main station
+- _HumiditySensor_ accessory indicating the relative humidity at the wireless outdoor sensor

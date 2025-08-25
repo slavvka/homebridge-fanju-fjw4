@@ -2,10 +2,17 @@
  * Copyright (c) 2021. Slava Mankivski
  */
 
-import {AccessoryConfig, AccessoryPlugin, API, Characteristic, Logging, Service} from 'homebridge';
-import {SensorType} from './api/response';
-import _ from 'lodash';
-import {DISPLAY_NAME, MANUFACTURER, MODEL, VERSION} from './settings';
+import {
+  AccessoryConfig,
+  AccessoryPlugin,
+  API,
+  Characteristic,
+  Logging,
+  Service,
+} from "homebridge";
+import { SensorType } from "./api/response";
+import _ from "lodash";
+import { DISPLAY_NAME, MANUFACTURER, MODEL, VERSION } from "./settings";
 
 /**
  * HomebridgePlatform
@@ -23,9 +30,9 @@ export class WeatherStation implements AccessoryPlugin {
 
   private readonly suffix: string;
   private readonly temperature: Service;
-  private readonly temperatureName: string = 'Temperature';
+  private readonly temperatureName: string = "Temperature";
   private readonly humidity: Service;
-  private readonly humidityName: string = 'Humidity';
+  private readonly humidityName: string = "Humidity";
   private readonly informationService: Service;
 
   constructor(log: Logging, config: AccessoryConfig, api: API) {
@@ -37,31 +44,43 @@ export class WeatherStation implements AccessoryPlugin {
     this.Service = this.api.hap.Service;
     this.Characteristic = this.api.hap.Characteristic;
 
-    this.suffix = this.config.isIndoor ? 'Indoor' : 'Outdoor';
+    this.suffix = this.config.isIndoor ? "Indoor" : "Outdoor";
 
-    this.informationService = new this.Service.AccessoryInformation(DISPLAY_NAME + ' ' + this.suffix);
-    this.informationService.setCharacteristic(this.Characteristic.SerialNumber, this.config.device?.sn || '')
+    this.informationService = new this.Service.AccessoryInformation(
+      DISPLAY_NAME + " " + this.suffix,
+    );
+    this.informationService
+      .setCharacteristic(
+        this.Characteristic.SerialNumber,
+        this.config.device?.sn || "",
+      )
       .setCharacteristic(this.Characteristic.Manufacturer, MANUFACTURER)
       .setCharacteristic(this.Characteristic.Model, MODEL)
-      .setCharacteristic(this.Characteristic.Name, DISPLAY_NAME + ' ' + this.suffix)
+      .setCharacteristic(
+        this.Characteristic.Name,
+        DISPLAY_NAME + " " + this.suffix,
+      )
       .setCharacteristic(this.Characteristic.Version, VERSION)
       .setCharacteristic(this.Characteristic.Identify, false)
       .setCharacteristic(this.Characteristic.FirmwareRevision, VERSION)
       .setCharacteristic(this.Characteristic.SerialNumber, VERSION);
 
     this.temperature = new this.Service.TemperatureSensor(
-      DISPLAY_NAME + ' ' + this.suffix + ' ' + this.temperatureName,
+      DISPLAY_NAME + " " + this.suffix + " " + this.temperatureName,
       this.temperatureName,
     );
     this.humidity = new this.Service.HumiditySensor(
-      DISPLAY_NAME + ' ' + this.suffix + ' ' + this.humidityName,
-      this.humidityName);
-    this.temperature.getCharacteristic(this.Characteristic.CurrentTemperature)
+      DISPLAY_NAME + " " + this.suffix + " " + this.humidityName,
+      this.humidityName,
+    );
+    this.temperature
+      .getCharacteristic(this.Characteristic.CurrentTemperature)
       .onGet(this.handleTemperatureGet.bind(this));
-    this.humidity.getCharacteristic(this.Characteristic.CurrentRelativeHumidity)
+    this.humidity
+      .getCharacteristic(this.Characteristic.CurrentRelativeHumidity)
       .onGet(this.handleHumidityGet.bind(this));
 
-    this.log.debug('Finished initializing accessory:', this.config.name);
+    this.log.debug("Finished initializing accessory:", this.config.name);
   }
 
   /**
@@ -69,7 +88,7 @@ export class WeatherStation implements AccessoryPlugin {
    * @private
    */
   private static fahrenheitToCelsius(fahrenheit: number): number {
-    return (fahrenheit - 32) * 5 / 9;
+    return ((fahrenheit - 32) * 5) / 9;
   }
 
   /**
@@ -78,26 +97,28 @@ export class WeatherStation implements AccessoryPlugin {
    */
   async getSensorData(type: SensorType, channel: number) {
     const state = await this.config.weatherApi?.getRealtimeState();
-    return _.find(state?.sensorDatas, {type, channel});
+    return _.find(state?.sensorDatas, { type, channel });
   }
 
   async handleTemperatureGet() {
-    const data = await this.getSensorData(SensorType.Temperature, this.config.isIndoor ? 0 : 1);
-    this.log.info('Retrieved ' + this.suffix + ' temperature: ' + data?.curVal);
+    const data = await this.getSensorData(
+      SensorType.Temperature,
+      this.config.isIndoor ? 0 : 1,
+    );
+    this.log.info("Retrieved " + this.suffix + " temperature: " + data?.curVal);
     return WeatherStation.fahrenheitToCelsius(data?.curVal);
   }
 
   async handleHumidityGet() {
-    const data = await this.getSensorData(SensorType.Humidity, this.config.isIndoor ? 0 : 1);
-    this.log.info('Retrieved ' + this.suffix + ' humidity: ' + data?.curVal);
+    const data = await this.getSensorData(
+      SensorType.Humidity,
+      this.config.isIndoor ? 0 : 1,
+    );
+    this.log.info("Retrieved " + this.suffix + " humidity: " + data?.curVal);
     return data?.curVal;
   }
 
   getServices(): Service[] {
-    return [
-      this.informationService,
-      this.temperature,
-      this.humidity,
-    ];
+    return [this.informationService, this.temperature, this.humidity];
   }
 }

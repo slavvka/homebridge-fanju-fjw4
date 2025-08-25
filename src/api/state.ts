@@ -2,7 +2,7 @@
  * Copyright (c) 2021. Slava Mankivski
  */
 
-import {RealtimeState} from './response';
+import { RealtimeState } from "./response";
 
 export class State {
   private state: RealtimeState;

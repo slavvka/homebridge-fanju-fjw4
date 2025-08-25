@@ -2,10 +2,10 @@
  * Copyright (c) 2021. Slava Mankivski
  */
 
-import {API} from 'homebridge';
+import { API } from "homebridge";
 
-import {PLATFORM_NAME} from './settings';
-import {WeatherStationPlatform} from './platform';
+import { PLATFORM_NAME } from "./settings";
+import { WeatherStationPlatform } from "./platform";
 
 /**
  * This method registers the platform with Homebridge

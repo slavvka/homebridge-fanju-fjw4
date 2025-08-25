@@ -2,19 +2,24 @@
  * Copyright (c) 2021. Slava Mankivski
  */
 
-import {Logger} from 'homebridge';
-import {AuthenticationError} from '../errors';
-import axios, {AxiosRequestConfig, AxiosResponse} from 'axios';
-import {Session} from './session';
-import {BoundDevicePayload, RealtimeState, RealtimeStatePayload, WeatherDevice} from './response';
-import crypto from 'crypto';
-import {State} from './state';
+import { Logger } from "homebridge";
+import { AuthenticationError } from "../errors";
+import axios, { AxiosRequestConfig, AxiosResponse } from "axios";
+import { Session } from "./session";
+import {
+  BoundDevicePayload,
+  RealtimeState,
+  RealtimeStatePayload,
+  WeatherDevice,
+} from "./response";
+import crypto from "crypto";
+import { State } from "./state";
 
 export class WeatherApi {
   private session: Session | undefined;
   private state: State;
-  private apiBaseUrl = 'https://app.emaxlife.net/V1.0';
-  private md5Key = 'emax@pwd123';
+  private apiBaseUrl = "https://app.emaxlife.net/V1.0";
+  private md5Key = "emax@pwd123";
 
   constructor(
     private username: string,
@@ -26,16 +31,16 @@ export class WeatherApi {
 
   public async getBoundDevice(): Promise<WeatherDevice | undefined> {
     if (!this.session?.hasToken()) {
-      throw new Error('No valid token');
+      throw new Error("No valid token");
     }
 
-    const {data} = await this.sendRequest<BoundDevicePayload>(
-      '/weather/getBindedDevice',
+    const { data } = await this.sendRequest<BoundDevicePayload>(
+      "/weather/getBindedDevice",
       {},
       {
         emaxToken: this.session?.getAccessToken(),
       },
-      'GET',
+      "GET",
     );
 
     if (data.status === 0) {
@@ -51,16 +56,16 @@ export class WeatherApi {
 
   public async retrieveState(): Promise<void> {
     if (!this.session?.hasToken()) {
-      throw new Error('No valid token');
+      throw new Error("No valid token");
     }
 
-    const {data} = await this.sendRequest<RealtimeStatePayload>(
-      '/weather/devData/getRealtime',
+    const { data } = await this.sendRequest<RealtimeStatePayload>(
+      "/weather/devData/getRealtime",
       {},
       {
         emaxToken: this.session?.getAccessToken(),
       },
-      'GET',
+      "GET",
     );
 
     if (data.status === 0) {
@@ -71,28 +76,31 @@ export class WeatherApi {
   }
 
   public async retrieveToken(): Promise<Session> {
-    let data: AxiosResponse['data'] = {status: 0};
+    let data: AxiosResponse["data"] = { status: 0 };
     if (!this.session?.hasToken()) {
-      this.log?.debug('Requesting new token');
+      this.log?.debug("Requesting new token");
       // No token, lets get a token from the Emaxlife API
       if (!this.username) {
-        throw new AuthenticationError('No username configured');
+        throw new AuthenticationError("No username configured");
       }
       if (!this.password) {
-        throw new AuthenticationError('No password configured');
+        throw new AuthenticationError("No password configured");
       }
 
       const form = {
         email: this.username,
-        pwd: crypto.createHash('md5').update(this.password + this.md5Key).digest('hex'),
+        pwd: crypto
+          .createHash("md5")
+          .update(this.password + this.md5Key)
+          .digest("hex"),
       };
 
       data = (
         await axios({
-          url: '/account/login',
+          url: "/account/login",
           baseURL: this.apiBaseUrl,
           data: form,
-          method: 'POST',
+          method: "POST",
         })
       ).data;
     }
@@ -116,16 +124,12 @@ export class WeatherApi {
    */
 
   public async sendRequest<T = Record<string, unknown>>(
-    url: AxiosRequestConfig['url'],
-    data: AxiosRequestConfig['data'],
-    headers: AxiosRequestConfig['headers'],
-    method: AxiosRequestConfig['method'],
+    url: AxiosRequestConfig["url"],
+    data: AxiosRequestConfig["data"],
+    headers: AxiosRequestConfig["headers"],
+    method: AxiosRequestConfig["method"],
   ): Promise<{ data: T }> {
-    this.log?.debug(
-      'Sending HTTP %s request to %s.',
-      method,
-      url,
-    );
+    this.log?.debug("Sending HTTP %s request to %s.", method, url);
 
     const response = await axios({
       baseURL: this.apiBaseUrl,
@@ -135,6 +139,6 @@ export class WeatherApi {
       method,
     });
 
-    return {data: response.data};
+    return { data: response.data };
   }
 }
