@@ -109,7 +109,7 @@ describe("WeatherStation", () => {
     const cfg = makeConfig(true, undefined, 1);
     const ws = new WeatherStation(log, cfg, api);
     const t = await (ws as any).handleTemperatureGet();
-    expect(Number.isNaN(t as any)).toBe(true);
+    expect(t).toBeNull();
   });
 
   it("skips humidity when sensor missing", async () => {
@@ -122,19 +122,19 @@ describe("WeatherStation", () => {
     } as any as AccessoryConfig;
     const ws = new WeatherStation(log, cfg, api);
     const h = await (ws as any).handleHumidityGet();
-    expect(h).toBeUndefined();
+    expect(h).toBeNull();
   });
 
-  it("handles no weatherApi present (returns NaN/undefined values)", async () => {
+  it("handles no weatherApi present (returns null values)", async () => {
     const cfg = makeConfig(true, 70, 1, true, false);
     const ws = new WeatherStation(log, cfg, api);
     const t = await (ws as any).handleTemperatureGet();
     const h = await (ws as any).handleHumidityGet();
-    expect(Number.isNaN(t as any)).toBe(true);
-    expect(h).toBeUndefined();
+    expect(t).toBeNull();
+    expect(h).toBeNull();
   });
 
-  it("handles no matching sensor in state (NaN/undefined result)", async () => {
+  it("handles no matching sensor in state (null result)", async () => {
     const cfg = {
       accessory: "Indoor",
       name: "Indoor",
@@ -148,7 +148,7 @@ describe("WeatherStation", () => {
     } as any as AccessoryConfig;
     const ws = new WeatherStation(log, cfg, api);
     const t = await (ws as any).handleTemperatureGet();
-    expect(Number.isNaN(t as any)).toBe(true);
+    expect(t).toBeNull();
   });
 
   it("exposes services array with 3 services and tolerates missing serial", () => {

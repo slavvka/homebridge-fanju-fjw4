@@ -59,7 +59,8 @@ export class WeatherStation implements AccessoryPlugin {
         this.Characteristic.Name,
         DISPLAY_NAME + " " + this.suffix,
       )
-      .setCharacteristic(this.Characteristic.FirmwareRevision, VERSION);
+      .setCharacteristic(this.Characteristic.FirmwareRevision, VERSION)
+      .setCharacteristic(this.Characteristic.SoftwareRevision, VERSION);
 
     this.temperature = new this.Service.TemperatureSensor(
       DISPLAY_NAME + " " + this.suffix + " " + this.temperatureName,
@@ -104,8 +105,12 @@ export class WeatherStation implements AccessoryPlugin {
       SensorType.Temperature,
       this.config.isIndoor ? 0 : 1,
     );
-    this.log.info("Retrieved " + this.suffix + " temperature: " + data?.curVal);
-    return WeatherStation.fahrenheitToCelsius(data?.curVal);
+    if (data?.curVal == null) {
+      // Indicate temporary unavailability with null per HAP expectations
+      return null;
+    }
+    this.log.info("Retrieved " + this.suffix + " temperature: " + data.curVal);
+    return WeatherStation.fahrenheitToCelsius(data.curVal);
   }
 
   async handleHumidityGet() {
@@ -113,8 +118,11 @@ export class WeatherStation implements AccessoryPlugin {
       SensorType.Humidity,
       this.config.isIndoor ? 0 : 1,
     );
-    this.log.info("Retrieved " + this.suffix + " humidity: " + data?.curVal);
-    return data?.curVal;
+    if (data?.curVal == null) {
+      return null;
+    }
+    this.log.info("Retrieved " + this.suffix + " humidity: " + data.curVal);
+    return data.curVal;
   }
 
   getServices(): Service[] {

@@ -143,10 +143,10 @@ describe("FJW4 Platform", () => {
     });
 
     expect(accessories.length).toBe(2);
-    // pollingInterval=1 is clamped to 600s
-    expect(intervalSpy).toHaveBeenCalledWith(expect.any(Function), 600000);
+    // pollingInterval=1 is clamped to 60s
+    expect(intervalSpy).toHaveBeenCalledWith(expect.any(Function), 60000);
     expect(logger.warn).toHaveBeenCalledWith(
-      "Polling interval %ds is below recommended minimum (600s). Clamping to 600s.",
+      "Polling interval %ds is below recommended minimum (60s). Clamping to 60s.",
       1,
     );
     jest.clearAllTimers();
@@ -177,7 +177,7 @@ describe("FJW4 Platform", () => {
 
     await platform.accessories(() => {});
 
-    expect(intervalSpy).toHaveBeenCalledWith(expect.any(Function), 600000);
+    expect(intervalSpy).toHaveBeenCalledWith(expect.any(Function), 60000);
     jest.clearAllTimers();
     jest.useRealTimers();
   });

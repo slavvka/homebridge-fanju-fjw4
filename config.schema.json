@@ -38,7 +38,7 @@
             "type": "number",
             "description": "The frequency in seconds that the plugin polls the cloud to get device updates",
             "required": false,
-            "minimum": 600
+            "minimum": 60
           }
         }
       }

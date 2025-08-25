@@ -23,7 +23,7 @@ export class WeatherStationPlatform implements StaticPlatformPlugin {
   private device: WeatherDevice | undefined;
 
   private stateTimer?: NodeJS.Timeout;
-  private readonly pollingInterval: number = 600;
+  private readonly pollingInterval: number = 60;
 
   constructor(logger: Logging, config: PlatformConfig, api: API) {
     this.logger = logger;
@@ -47,15 +47,15 @@ export class WeatherStationPlatform implements StaticPlatformPlugin {
       ? config.options.pollingInterval
       : this.pollingInterval;
 
-    // Enforce minimum interval of 600s to respect API and schema guidance
-    if (this.pollingInterval < 600) {
+    // Enforce minimum interval of 60s to respect API and schema guidance
+    if (this.pollingInterval < 60) {
       this.logger.warn(
-        "Polling interval %ds is below recommended minimum (600s). Clamping to 600s.",
+        "Polling interval %ds is below recommended minimum (60s). Clamping to 60s.",
         this.pollingInterval,
       );
       // eslint-disable-next-line @typescript-eslint/ban-ts-comment
       // @ts-ignore - pollingInterval is readonly; we reassign via cast to satisfy runtime while keeping type safety elsewhere
-      this.pollingInterval = 600 as unknown as number;
+      this.pollingInterval = 60 as unknown as number;
     }
 
     this.weatherApi = new WeatherApi(
@@ -118,6 +118,8 @@ export class WeatherStationPlatform implements StaticPlatformPlugin {
     this.stateTimer = setInterval(() => {
       void this.retrieveState();
     }, this.pollingInterval * 1000);
+    // Do not keep the process alive solely because of the interval
+    this.stateTimer.unref?.();
   }
 
   private async retrieveState(): Promise<void> {
