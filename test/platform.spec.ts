@@ -133,7 +133,7 @@ describe("FJW4 Platform", () => {
       .mockResolvedValue({ sn: "SN" } as any);
     jest.spyOn(WeatherApi.prototype, "retrieveState").mockResolvedValue();
 
-    const intervalSpy = jest.spyOn(global, "setInterval");
+    const timeoutSpy = jest.spyOn(global, "setTimeout");
 
     const platform = new WeatherStationPlatform(logger as any, config, api);
 
@@ -144,7 +144,7 @@ describe("FJW4 Platform", () => {
 
     expect(accessories.length).toBe(2);
     // pollingInterval=1 is clamped to 60s
-    expect(intervalSpy).toHaveBeenCalledWith(expect.any(Function), 60000);
+    expect(timeoutSpy).toHaveBeenCalledWith(expect.any(Function), 60000);
     expect(logger.warn).toHaveBeenCalledWith(
       "Polling interval %ds is below recommended minimum (60s). Clamping to 60s.",
       1,
@@ -171,13 +171,13 @@ describe("FJW4 Platform", () => {
       .mockResolvedValue({ sn: "SN" } as any);
     jest.spyOn(WeatherApi.prototype, "retrieveState").mockResolvedValue();
 
-    const intervalSpy = jest.spyOn(global, "setInterval");
+    const timeoutSpy = jest.spyOn(global, "setTimeout");
 
     const platform = new WeatherStationPlatform(logger as any, config, api);
 
     await platform.accessories(() => {});
 
-    expect(intervalSpy).toHaveBeenCalledWith(expect.any(Function), 60000);
+    expect(timeoutSpy).toHaveBeenCalledWith(expect.any(Function), 60000);
     jest.clearAllTimers();
     jest.useRealTimers();
   });
@@ -227,7 +227,7 @@ describe("FJW4 Platform", () => {
       .mockResolvedValue({ sn: "SN" } as any);
     jest.spyOn(WeatherApi.prototype, "retrieveState").mockResolvedValue();
 
-    const clearSpy = jest.spyOn(global, "clearInterval");
+    const clearSpy = jest.spyOn(global, "clearTimeout");
     const platform = new WeatherStationPlatform(logger as any, config, api);
     // start interval
     (platform as any).setupStateRetrieval();
@@ -272,11 +272,11 @@ describe("FJW4 Platform", () => {
       .mockResolvedValue({ sn: "SN" } as any);
     jest.spyOn(WeatherApi.prototype, "retrieveState").mockResolvedValue();
 
-    const intervalSpy = jest.spyOn(global, "setInterval");
+    const timeoutSpy = jest.spyOn(global, "setTimeout");
     const platform = new WeatherStationPlatform(logger as any, config, api);
     await platform.accessories(() => {});
 
-    expect(intervalSpy).toHaveBeenCalledWith(
+    expect(timeoutSpy).toHaveBeenCalledWith(
       expect.any(Function),
       601000,
     );
@@ -291,7 +291,7 @@ describe("FJW4 Platform", () => {
     const api = createApi();
     const config: any = { platform: "PL", name: "NAME" };
 
-    const intervalSpy = jest.spyOn(global, "setInterval");
+    const timeoutSpy = jest.spyOn(global, "setTimeout");
     const platform = new WeatherStationPlatform(logger as any, config, api);
 
     let accessories: any[] = [];
@@ -300,8 +300,290 @@ describe("FJW4 Platform", () => {
     });
 
     expect(accessories.length).toBe(2);
-    expect(intervalSpy).toHaveBeenCalled();
+    expect(timeoutSpy).toHaveBeenCalled();
     jest.clearAllTimers();
+    jest.useRealTimers();
+  });
+
+  it("schedules next run only after success (no overlap)", async () => {
+    jest.useFakeTimers();
+    const logger = createLogger();
+    const api = createApi();
+    const config: any = {
+      platform: "PL",
+      name: "NAME",
+      options: { username: "u", password: "p", pollingInterval: 60 },
+    };
+
+    jest
+      .spyOn(WeatherApi.prototype, "retrieveToken")
+      .mockResolvedValue(new Session("abc") as any);
+    jest
+      .spyOn(WeatherApi.prototype, "getBoundDevice")
+      .mockResolvedValue({ sn: "SN" } as any);
+    const retrieveStateSpy = jest
+      .spyOn(WeatherApi.prototype, "retrieveState")
+      .mockResolvedValue();
+
+    const timeoutSpy = jest.spyOn(global, "setTimeout");
+    jest.spyOn(Math, "random").mockReturnValue(0);
+    const platform = new WeatherStationPlatform(logger as any, config, api);
+    await platform.accessories(() => {});
+    // First schedule
+    expect(timeoutSpy).toHaveBeenCalledWith(expect.any(Function), 60000);
+    expect(timeoutSpy).toHaveBeenCalled();
+    const firstHandler = timeoutSpy.mock.calls[0]![0] as () => Promise<void>;
+    await firstHandler();
+    expect(retrieveStateSpy.mock.calls.length).toBeGreaterThanOrEqual(2); // initial + at least first tick
+    const lastCall = timeoutSpy.mock.calls[timeoutSpy.mock.calls.length - 1];
+    expect(lastCall?.[1]).toBe(60000);
+    jest.useRealTimers();
+  });
+
+  it("backs off on error and logs warning", async () => {
+    jest.useFakeTimers();
+    const logger = createLogger();
+    const api = createApi();
+    const config: any = {
+      platform: "PL",
+      name: "NAME",
+      options: { username: "u", password: "p", pollingInterval: 60 },
+    };
+
+    jest
+      .spyOn(WeatherApi.prototype, "retrieveToken")
+      .mockResolvedValue(new Session("abc") as any);
+    jest
+      .spyOn(WeatherApi.prototype, "getBoundDevice")
+      .mockResolvedValue({ sn: "SN" } as any);
+    const retrieveStateSpy = jest
+      .spyOn(WeatherApi.prototype, "retrieveState")
+      .mockResolvedValueOnce() // initial in accessories
+      .mockRejectedValueOnce(new Error("neterr")); // first loop tick
+
+    const timeoutSpy = jest.spyOn(global, "setTimeout");
+    jest.spyOn(Math, "random").mockReturnValue(0);
+    const platform = new WeatherStationPlatform(logger as any, config, api);
+    await platform.accessories(() => {});
+
+    // run only the next scheduled tick → it will error and back off to 120000ms
+    expect(timeoutSpy).toHaveBeenCalled();
+    const firstHandler = timeoutSpy.mock.calls[0]![0] as () => Promise<void>;
+    await firstHandler();
+    expect(retrieveStateSpy.mock.calls.length).toBeGreaterThanOrEqual(2);
+    expect(logger.warn).toHaveBeenCalled();
+    // There should now be another timeout scheduled with backoff delay
+    const backoffCall = timeoutSpy.mock.calls[timeoutSpy.mock.calls.length - 1];
+    expect(backoffCall?.[1]).toBe(120000);
+    jest.useRealTimers();
+  });
+
+  it("backs off and caps at 5x base on repeated errors", async () => {
+    jest.useFakeTimers();
+    const logger = createLogger();
+    const api = createApi();
+    const config: any = {
+      platform: "PL",
+      name: "NAME",
+      options: { username: "u", password: "p", pollingInterval: 60 },
+    };
+
+    jest
+      .spyOn(WeatherApi.prototype, "retrieveToken")
+      .mockResolvedValue(new Session("abc") as any);
+    jest
+      .spyOn(WeatherApi.prototype, "getBoundDevice")
+      .mockResolvedValue({ sn: "SN" } as any);
+    const retrieveStateSpy = jest
+      .spyOn(WeatherApi.prototype, "retrieveState")
+      .mockResolvedValueOnce() // initial in accessories
+      .mockRejectedValueOnce(new Error("err1"))
+      .mockRejectedValueOnce(new Error("err2"))
+      .mockRejectedValueOnce(new Error("err3"));
+
+    const timeoutSpy = jest.spyOn(global, "setTimeout");
+    jest.spyOn(Math, "random").mockReturnValue(0);
+    const platform = new WeatherStationPlatform(logger as any, config, api);
+    await platform.accessories(() => {});
+
+    // First scheduled (base 60000)
+    expect(timeoutSpy).toHaveBeenCalled();
+    let handler = timeoutSpy.mock.calls[0]![0] as () => Promise<void>;
+    await handler();
+    // Backoff 120000
+    let last = timeoutSpy.mock.calls[timeoutSpy.mock.calls.length - 1];
+    expect(last?.[1]).toBe(120000);
+
+    handler = last![0] as () => Promise<void>;
+    await handler();
+    // Backoff 240000
+    last = timeoutSpy.mock.calls[timeoutSpy.mock.calls.length - 1];
+    expect(last?.[1]).toBe(240000);
+
+    handler = last![0] as () => Promise<void>;
+    await handler();
+    // Capped at 300000
+    last = timeoutSpy.mock.calls[timeoutSpy.mock.calls.length - 1];
+    expect(last?.[1]).toBe(300000);
+
+    // Ensure we invoked three additional ticks + initial
+    expect(retrieveStateSpy.mock.calls.length).toBeGreaterThanOrEqual(4);
+    jest.useRealTimers();
+  });
+
+  it("uses jitter on success when Math.random > 0", async () => {
+    jest.useFakeTimers();
+    const logger = createLogger();
+    const api = createApi();
+    const config: any = {
+      platform: "PL",
+      name: "NAME",
+      options: { username: "u", password: "p", pollingInterval: 60 },
+    };
+
+    jest
+      .spyOn(WeatherApi.prototype, "retrieveToken")
+      .mockResolvedValue(new Session("abc") as any);
+    jest
+      .spyOn(WeatherApi.prototype, "getBoundDevice")
+      .mockResolvedValue({ sn: "SN" } as any);
+    jest.spyOn(WeatherApi.prototype, "retrieveState").mockResolvedValue();
+
+    const timeoutSpy = jest.spyOn(global, "setTimeout");
+    // Jitter = floor(0.5 * 5000) = 2500
+    jest.spyOn(Math, "random").mockReturnValue(0.5);
+    const platform = new WeatherStationPlatform(logger as any, config, api);
+    await platform.accessories(() => {});
+
+    // Call the first scheduled tick
+    const firstHandler = timeoutSpy.mock.calls[0]![0] as () => Promise<void>;
+    await firstHandler();
+
+    const last = timeoutSpy.mock.calls[timeoutSpy.mock.calls.length - 1];
+    expect(last?.[1]).toBe(60000 + 2500);
+    jest.useRealTimers();
+  });
+
+  it("recovers after error and resets backoff to base with jitter", async () => {
+    jest.useFakeTimers();
+    const logger = createLogger();
+    const api = createApi();
+    const config: any = {
+      platform: "PL",
+      name: "NAME",
+      options: { username: "u", password: "p", pollingInterval: 60 },
+    };
+
+    jest
+      .spyOn(WeatherApi.prototype, "retrieveToken")
+      .mockResolvedValue(new Session("abc") as any);
+    jest
+      .spyOn(WeatherApi.prototype, "getBoundDevice")
+      .mockResolvedValue({ sn: "SN" } as any);
+    const retrieveStateSpy = jest
+      .spyOn(WeatherApi.prototype, "retrieveState")
+      .mockResolvedValueOnce() // initial in accessories
+      .mockRejectedValueOnce(new Error("neterr")) // first loop tick (error)
+      .mockResolvedValueOnce(); // recovery on backoff tick
+
+    const timeoutSpy = jest.spyOn(global, "setTimeout");
+    jest.spyOn(Math, "random").mockReturnValue(0); // no jitter for determinism
+    const platform = new WeatherStationPlatform(logger as any, config, api);
+    await platform.accessories(() => {});
+
+    // First scheduled (base 60000) → run it to error and backoff
+    const firstHandler = timeoutSpy.mock.calls[0]![0] as () => Promise<void>;
+    await firstHandler();
+    let last = timeoutSpy.mock.calls[timeoutSpy.mock.calls.length - 1];
+    expect(last?.[1]).toBe(120000);
+
+    // Now run the backoff handler → this time it succeeds and should reset to base (60000 + jitter 0)
+    const backoffHandler = last![0] as () => Promise<void>;
+    await backoffHandler();
+    last = timeoutSpy.mock.calls[timeoutSpy.mock.calls.length - 1];
+    expect(last?.[1]).toBe(60000);
+    expect(retrieveStateSpy.mock.calls.length).toBeGreaterThanOrEqual(3);
+    jest.useRealTimers();
+  });
+
+  it("after recovery, schedules next with jitter > 0", async () => {
+    jest.useFakeTimers();
+    const logger = createLogger();
+    const api = createApi();
+    const config: any = {
+      platform: "PL",
+      name: "NAME",
+      options: { username: "u", password: "p", pollingInterval: 60 },
+    };
+
+    jest
+      .spyOn(WeatherApi.prototype, "retrieveToken")
+      .mockResolvedValue(new Session("abc") as any);
+    jest
+      .spyOn(WeatherApi.prototype, "getBoundDevice")
+      .mockResolvedValue({ sn: "SN" } as any);
+    const retrieveStateSpy = jest
+      .spyOn(WeatherApi.prototype, "retrieveState")
+      .mockResolvedValueOnce() // initial in accessories
+      .mockRejectedValueOnce(new Error("neterr")) // first loop tick (error)
+      .mockResolvedValueOnce(); // recovery on backoff tick
+
+    const timeoutSpy = jest.spyOn(global, "setTimeout");
+    jest.spyOn(Math, "random").mockReturnValue(0); // deterministic first schedules
+
+    const platform = new WeatherStationPlatform(logger as any, config, api);
+    await platform.accessories(() => {});
+
+    // First scheduled (base 60000) → run it to error and backoff
+    const firstHandler = timeoutSpy.mock.calls[0]![0] as () => Promise<void>;
+    await firstHandler();
+    let last = timeoutSpy.mock.calls[timeoutSpy.mock.calls.length - 1];
+    expect(last?.[1]).toBe(120000);
+
+    // Now set jitter to 0.4 and run the backoff handler (which will succeed)
+    ;(Math.random as jest.Mock).mockReturnValue(0.4);
+    const backoffHandler = last![0] as () => Promise<void>;
+    await backoffHandler();
+    last = timeoutSpy.mock.calls[timeoutSpy.mock.calls.length - 1];
+    expect(last?.[1]).toBe(60000 + Math.floor(0.4 * 5000));
+    expect(retrieveStateSpy.mock.calls.length).toBeGreaterThanOrEqual(3);
+    jest.useRealTimers();
+  });
+
+  it("logs optional chaining path when logger.warn is missing", async () => {
+    jest.useFakeTimers();
+    // Intentionally provide a logger without warn method to hit logger?.warn false branch
+    const logger = ({ info: jest.fn(), error: jest.fn(), debug: jest.fn() } as unknown) as Logging;
+    const api = createApi();
+    const config: any = {
+      platform: "PL",
+      name: "NAME",
+      options: { username: "u", password: "p", pollingInterval: 60 },
+    };
+
+    jest
+      .spyOn(WeatherApi.prototype, "retrieveToken")
+      .mockResolvedValue(new Session("abc") as any);
+    jest
+      .spyOn(WeatherApi.prototype, "getBoundDevice")
+      .mockResolvedValue({ sn: "SN" } as any);
+    // Force an error on the first scheduled tick to trigger catch branch
+    jest
+      .spyOn(WeatherApi.prototype, "retrieveState")
+      .mockResolvedValueOnce() // initial
+      .mockRejectedValueOnce(new Error("oops"));
+
+    const timeoutSpy = jest.spyOn(global, "setTimeout");
+    jest.spyOn(Math, "random").mockReturnValue(0);
+    const platform = new WeatherStationPlatform(logger as any, config, api);
+    await platform.accessories(() => {});
+
+    expect(timeoutSpy).toHaveBeenCalled();
+    const firstHandler = timeoutSpy.mock.calls[0]![0] as () => Promise<void>;
+    await firstHandler();
+    // Backoff to 120000 without calling warn (since it's missing)
+    const last = timeoutSpy.mock.calls[timeoutSpy.mock.calls.length - 1];
+    expect(last?.[1]).toBe(120000);
     jest.useRealTimers();
   });
 });

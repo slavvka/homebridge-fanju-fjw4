@@ -24,6 +24,7 @@ export class WeatherStationPlatform implements StaticPlatformPlugin {
 
   private stateTimer?: NodeJS.Timeout;
   private readonly pollingInterval: number = 60;
+  private backoffMs: number | undefined;
 
   constructor(logger: Logging, config: PlatformConfig, api: API) {
     this.logger = logger;
@@ -66,10 +67,10 @@ export class WeatherStationPlatform implements StaticPlatformPlugin {
 
     this.logger.info("Finished initializing platform: ", this.config.name);
 
-    // Ensure interval is cleaned up on shutdown
+    // Ensure timer is cleaned up on shutdown
     this.api.on("shutdown", () => {
       if (this.stateTimer) {
-        clearInterval(this.stateTimer);
+        clearTimeout(this.stateTimer);
       }
     });
   }
@@ -115,11 +116,32 @@ export class WeatherStationPlatform implements StaticPlatformPlugin {
   }
 
   private setupStateRetrieval(): void {
-    this.stateTimer = setInterval(() => {
-      void this.retrieveState();
-    }, this.pollingInterval * 1000);
-    // Do not keep the process alive solely because of the interval
-    this.stateTimer.unref?.();
+    const baseMs = this.pollingInterval * 1000;
+    const scheduleNext = (delayMs: number) => {
+      this.stateTimer = setTimeout(async () => {
+        try {
+          await this.retrieveState();
+          // success → reset backoff and schedule with small jitter (0..5s)
+          this.backoffMs = undefined;
+          const jitter = Math.floor(Math.random() * 5000);
+          scheduleNext(baseMs + jitter);
+        } catch (err) {
+          // error → exponential backoff capped at 5x base
+          const prev = this.backoffMs ?? baseMs;
+          this.backoffMs = Math.min(prev * 2, baseMs * 5);
+          this.logger?.warn?.(
+            "State retrieval failed: %s. Backing off to %dms.",
+            (err as Error)?.message ?? String(err),
+            this.backoffMs,
+          );
+          scheduleNext(this.backoffMs);
+        }
+      }, delayMs);
+      this.stateTimer.unref?.();
+    };
+
+    // First run after base interval; initial fetch was already performed in accessories()
+    scheduleNext(baseMs);
   }
 
   private async retrieveState(): Promise<void> {
