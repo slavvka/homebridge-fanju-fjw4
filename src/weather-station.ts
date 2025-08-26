@@ -14,9 +14,15 @@ import { SensorType } from "./api/response";
 import { DISPLAY_NAME, MANUFACTURER, MODEL, VERSION } from "./settings";
 
 /**
- * HomebridgePlatform
- * This class is the main constructor for your plugin, this is where you should
- * parse the user config and discover/register accessories with Homebridge.
+ * WeatherStation accessory representing either Indoor or Outdoor sensors.
+ *
+ * Exposes:
+ * - TemperatureSensor (CurrentTemperature)
+ * - HumiditySensor (CurrentRelativeHumidity)
+ *
+ * Reads data from the platform-provided WeatherApi state cache on each GET request
+ * (the Home app will trigger these frequently). When data is temporarily unavailable
+ * the handlers return null to indicate TemporaryUnavailable to HAP.
  */
 export class WeatherStation implements AccessoryPlugin {
   private readonly log: Logging;
@@ -34,6 +40,12 @@ export class WeatherStation implements AccessoryPlugin {
   private readonly humidityName: string = "Humidity";
   private readonly informationService: Service;
 
+  /**
+   * Create a new WeatherStation accessory.
+   * @param log Homebridge logger
+   * @param config Accessory config (includes isIndoor, weatherApi, device)
+   * @param api Homebridge API
+   */
   constructor(log: Logging, config: AccessoryConfig, api: API) {
     this.log = log;
     this.config = config;
@@ -80,17 +92,15 @@ export class WeatherStation implements AccessoryPlugin {
     this.log.debug("Finished initializing accessory:", this.config.name);
   }
 
-  /**
-   * @param {number} fahrenheit
-   * @private
-   */
+  /** Convert Fahrenheit to Celsius. */
   private static fahrenheitToCelsius(fahrenheit: number): number {
     return ((fahrenheit - 32) * 5) / 9;
   }
 
   /**
-   * @param {SensorType} type
-   * @param {number} channel
+   * Get sensor reading for the provided sensor type and channel from cached state.
+   * @param type Sensor type (Temperature or Humidity)
+   * @param channel 0 for Indoor, 1 for Outdoor
    */
   async getSensorData(type: SensorType, channel: number) {
     const state = await this.config.weatherApi?.getRealtimeState();
@@ -100,6 +110,7 @@ export class WeatherStation implements AccessoryPlugin {
     );
   }
 
+  /** Handle CurrentTemperature GET. Returns null when data is unavailable. */
   async handleTemperatureGet() {
     const data = await this.getSensorData(
       SensorType.Temperature,
@@ -113,6 +124,7 @@ export class WeatherStation implements AccessoryPlugin {
     return WeatherStation.fahrenheitToCelsius(data.curVal);
   }
 
+  /** Handle CurrentRelativeHumidity GET. Returns null when data is unavailable. */
   async handleHumidityGet() {
     const data = await this.getSensorData(
       SensorType.Humidity,
@@ -125,6 +137,7 @@ export class WeatherStation implements AccessoryPlugin {
     return data.curVal;
   }
 
+  /** Return HAP services exposed by this accessory. */
   getServices(): Service[] {
     return [this.informationService, this.temperature, this.humidity];
   }

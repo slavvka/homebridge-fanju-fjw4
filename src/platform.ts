@@ -2,6 +2,18 @@
  * Copyright (c) 2021. Slava Mankivski
  */
 
+/**
+ * Homebridge platform implementation for the FanJu FJW4 weather station.
+ *
+ * This platform creates two fixed accessories (Indoor and Outdoor) and is designed as a
+ * StaticPlatformPlugin because the device graph is known and does not change at runtime.
+ *
+ * Polling strategy:
+ * - Non-overlapping, self-scheduling loop using setTimeout
+ * - Small random jitter on success to avoid synchronized bursts
+ * - Exponential backoff on failures, capped at 5x the base interval
+ * - Timers are unref’d and cleared on Homebridge shutdown
+ */
 import type {
   AccessoryConfig,
   AccessoryPlugin,
@@ -15,17 +27,31 @@ import { WeatherStation } from "./weather-station";
 import { WeatherDevice } from "./api/response";
 
 export class WeatherStationPlatform implements StaticPlatformPlugin {
+  /** Homebridge logger. */
   private readonly logger: Logging;
+  /** Platform configuration provided by Homebridge. */
   private readonly config: PlatformConfig;
+  /** Homebridge API instance. */
   private readonly api: API;
 
+  /** REST API client used to communicate with the vendor cloud. */
   private readonly weatherApi?: WeatherApi;
+  /** Cached bound device metadata retrieved from the cloud. */
   private device: WeatherDevice | undefined;
 
+  /** Handle of the scheduled polling timer (self-scheduling setTimeout). */
   private stateTimer?: NodeJS.Timeout;
+  /** Base polling interval in seconds. Minimum enforced via clamp. */
   private readonly pollingInterval: number = 60;
+  /** Current backoff delay in milliseconds (undefined when healthy). */
   private backoffMs: number | undefined;
 
+  /**
+   * Construct the platform.
+   * @param logger Homebridge logger
+   * @param config Homebridge platform configuration
+   * @param api Homebridge API
+   */
   constructor(logger: Logging, config: PlatformConfig, api: API) {
     this.logger = logger;
     this.config = config;
@@ -79,6 +105,10 @@ export class WeatherStationPlatform implements StaticPlatformPlugin {
    * @param {boolean} isIndoor
    * @private
    */
+  /**
+   * Build an AccessoryConfig for the Indoor or Outdoor accessory.
+   * @param isIndoor true for the Indoor accessory, false for Outdoor
+   */
   private getAccessoryConfig(isIndoor: boolean): AccessoryConfig {
     const suffix = isIndoor ? "Indoor" : "Outdoor";
     return {
@@ -92,6 +122,11 @@ export class WeatherStationPlatform implements StaticPlatformPlugin {
 
   /**
    * @param {(foundAccessories: AccessoryPlugin[]) => void): void} callback
+   */
+  /**
+   * Discover and register accessories with Homebridge.
+   * Performs initial token retrieval, device binding fetch, and first state fetch,
+   * then starts the self-scheduling polling loop.
    */
   async accessories(
     callback: (foundAccessories: AccessoryPlugin[]) => void,
@@ -115,6 +150,9 @@ export class WeatherStationPlatform implements StaticPlatformPlugin {
     callback([indoorWeatherStation, outdoorWeatherStation]);
   }
 
+  /**
+   * Start the self-scheduling state retrieval loop with jitter and backoff.
+   */
   private setupStateRetrieval(): void {
     const baseMs = this.pollingInterval * 1000;
     const scheduleNext = (delayMs: number) => {
@@ -144,6 +182,9 @@ export class WeatherStationPlatform implements StaticPlatformPlugin {
     scheduleNext(baseMs);
   }
 
+  /**
+   * Retrieve the current realtime state from the cloud via WeatherApi.
+   */
   private async retrieveState(): Promise<void> {
     await this.weatherApi?.retrieveState();
   }

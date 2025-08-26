@@ -15,12 +15,26 @@ import {
 import crypto from "crypto";
 import { State } from "./state";
 
+/**
+ * Thin HTTP client for the vendor cloud API used by the FanJu FJW4 weather station.
+ *
+ * Responsibilities:
+ * - Manage session token lifecycle (initial retrieval)
+ * - Retrieve bound device metadata
+ * - Retrieve realtime state and keep it in a simple in-memory cache (State)
+ * - Provide a typed sendRequest<T>() wrapper around axios
+ */
 export class WeatherApi {
   private session: Session | undefined;
   private state: State;
   private apiBaseUrl = "https://app.emaxlife.net/V1.0";
   private md5Key = "emax@pwd123";
 
+  /**
+   * @param username Account email for the WeatherSense/EMaxLife app
+   * @param password Account password for the WeatherSense/EMaxLife app
+   * @param log Optional Homebridge logger for debug output
+   */
   constructor(
     private username: string,
     private password: string,
@@ -29,6 +43,7 @@ export class WeatherApi {
     this.state = new State();
   }
 
+  /** Retrieve the device bound to this account. */
   public async getBoundDevice(): Promise<WeatherDevice | undefined> {
     if (!this.session?.hasToken()) {
       throw new Error("No valid token");
@@ -47,10 +62,12 @@ export class WeatherApi {
     }
   }
 
+  /** Return the last retrieved realtime state. */
   public getRealtimeState(): RealtimeState {
     return this.state.getState();
   }
 
+  /** Fetch realtime state and update the local cache. */
   public async retrieveState(): Promise<void> {
     if (!this.session?.hasToken()) {
       throw new Error("No valid token");
@@ -69,6 +86,7 @@ export class WeatherApi {
     }
   }
 
+  /** Retrieve and cache a session token if not present. */
   public async retrieveToken(): Promise<Session> {
     if (!this.session?.hasToken()) {
       this.log?.debug("Requesting new token");
@@ -110,6 +128,12 @@ export class WeatherApi {
    * HTTP methods
    */
 
+  /**
+   * Send a typed HTTP request.
+   * @param url relative URL
+   * @param method HTTP method
+   * @param options Optional params/data/headers
+   */
   public async sendRequest<T = Record<string, unknown>>(
     url: string,
     method: "GET" | "POST" | "PUT" | "DELETE",
